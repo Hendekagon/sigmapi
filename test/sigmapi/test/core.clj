@@ -9,32 +9,6 @@
     [loom.graph :as lg]
     [loom.alg :as la]))
 
-
-(defn
-  fg-test-graph-f7
-  "Figure 7 in Frey2001 Factor graphs and the sum product algorithm"
-  ([] (fg-test-graph-f7 :sp/sp))
-  ([alg] (fg-test-graph-f7 alg (lg/graph ['fa 'x1] ['fb 'x2] ['x1 'fc] ['x2 'fc] ['fc 'x3] ['x3 'fd] ['x3 'fe] ['fd 'x4] ['fe 'x5])))
-  ([alg g]
-   (fg-test-graph-f7 alg g {'x5 #{0 1} 'x2 #{0 1 2} 'x3 #{0 1 2 3} 'x4 #{0 1} 'x1 #{0 1}}))
-  ([alg g states-map]
-   {
-    :states   states-map
-    :messages {}
-    :graph    g
-    :nodes    {
-               'x1 (make-node {:alg alg :type :sp/variable :id 'x1})
-               'x2 (make-node {:alg alg :type :sp/variable :id 'x2})
-               'x3 (make-node {:alg alg :type :sp/variable :id 'x3})
-               'x4 (make-node {:alg alg :type :sp/variable :id 'x4})
-               'x5 (make-node {:alg alg :type :sp/variable :id 'x5})
-               'fa (make-node {:alg alg :type :sp/factor :graph g :id 'fa :cpm (m/matrix [0.25 0.75]) :dfn {'x1 0}})
-               'fb (make-node {:alg alg :type :sp/factor :graph g :id 'fb :cpm (m/matrix [0.19 0.9 0.452]) :dfn {'x2 0}})
-               'fc (make-node {:alg alg :type :sp/factor :graph g :id 'fc :cpm (random-matrix [2 3 4]) :dfn {'x1 0 'x2 1 'x3 2}})
-               'fd (make-node {:alg alg :type :sp/factor :graph g :id 'fd :cpm (random-matrix [4 2]) :dfn {'x3 0 'x4 1}})
-               'fe (make-node {:alg alg :type :sp/factor :graph g :id 'fe :cpm (random-matrix [4 2]) :dfn {'x3 0 'x5 1}})
-               }}))
-
 (defn figure7
   "Figure 7 in Frey2001 Factor graphs and the sum product algorithm"
   ([]
@@ -109,7 +83,7 @@
             [0.8 0.1 0.1]
             ]
            (:x3 [0.3 0.6 0.1])]))
-      exp->fg :sp/mxp
+      exp->fg :max
       propagate
       MAP-config)))
 
@@ -129,7 +103,7 @@
             [0.8 0.1 0.1]
             ]
            (:x3 [0.3 0.6 0.1])]))
-       (exp->fg :sp/mxp)
+       (exp->fg :max)
        propagate
        MAP-config))
 
@@ -207,7 +181,7 @@
      {m1 :marginals l :learned :as em0}
        (-> model (assoc :data {:p-door door :p-door-0 door :p-door-1 door :p-your-1st-choice choice :p-your-1st-choice-0 choice}) sp/learn-step)
       m2
-       (-> l (assoc :alg :sp/mxp) sp/change-alg propagate MAP-config)
+       (-> l (assoc :alg :max) propagate MAP-config)
      ]
     (println "  " (select-keys m1 [:door :prize-0 :prize-1 :your-1st-choice :host's-choice :your-2nd-choice]))
     (println "  " m2)
