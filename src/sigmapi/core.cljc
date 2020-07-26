@@ -508,10 +508,10 @@
   [previous-model {:keys [alg << messages graph nodes] :as model}]
   (reduce
     (fn [{root :root :as r} [id msgs]]
-      (println ">mp" root)
+      ;(println ">mp" root)
       (let [prev-msgs (get-in previous-model [:messages id]) node (get nodes id)]
         ; messages have arrived on all but one of the edges incident on v
-        (println " >mp1" node)
+        ;(println " >mp1" node)
         (if (and (not= msgs prev-msgs) (== (count msgs) (dec (lg/out-degree graph id))))
          (let [parent (first (set/difference (lg/successors graph id) (into #{} (keys msgs))))
                node (get nodes id)]
@@ -523,7 +523,7 @@
            (let [[return _] (first (set/difference
                                         (into #{} (map (juxt :id :flow) (vals msgs)))
                                         (into #{} (map (juxt :id :flow) (vals prev-msgs)))))]
-             (println " >mp2" node)
+             ;(println " >mp2" node)
              (if (and (<< :pass? node) (= :>< (get-in msgs [return :flow])))
                (if root r (update-in r [:messages id] dissoc return))
                (reduce
@@ -581,11 +581,11 @@
 
 (defn marginals
   "Returns a map of marginals for the nodes of the given model"
-  [{:keys [messages graph nodes] :as model}]
+  [{:keys [<< messages graph nodes] :as model}]
   (into {}
     (map
       (fn [[id node]]
-        [id (vec (m/emap P (maybe-list (:value (<> node (vals (get messages id)) nil nil nil)))))])
+        [id (vec (m/emap P (maybe-list (:value (<< :<> node (vals (get messages id)) nil nil nil)))))])
       (filter (comp (fn [n] (= :variable (:kind n))) val) nodes))))
 
 (defn all-marginals
