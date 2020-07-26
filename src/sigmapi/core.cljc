@@ -187,7 +187,7 @@
 (defn dmm []
   {
    [:sp :>< :factor]
-   (fn [{:keys [cpm id dfn messages to]}]
+   (fn [{:keys [cpm id dfn]} messages to]
      (let [
            prod (combine cpm m/add messages to dfn)
            sum (m/emap ln- (map m/esum (m/emap P prod)))
@@ -209,12 +209,12 @@
    [:max :i :factor]
    (fn [{:keys [cpm id dfn]}] {:value cpm :repr id :dim-for-node dfn})
    [:ssp :>< :factor]
-   (fn [{:keys [cpm id dim-for-node messages to]}]
+   (fn [{:keys [cpm id dfn]} messages to]
      {
       :value (cons '∑ (list (cons '∏ (list id (if (== 1 (count messages)) (:repr (first messages)) (map :repr messages))))))
       })
    [:smax :>< :factor]
-   (fn [{:keys [cpm id dim-for-node messages to]}]
+   (fn [{:keys [cpm id dfn]} messages to]
      {
       :value (list 'min (cons '∑ (cons id (map :repr messages))))
       })
@@ -508,10 +508,10 @@
   [previous-model {:keys [alg << messages graph nodes] :as model}]
   (reduce
     (fn [{root :root :as r} [id msgs]]
-      ;(println ">mp" root)
+      (println ">mp" root)
       (let [prev-msgs (get-in previous-model [:messages id]) node (get nodes id)]
         ; messages have arrived on all but one of the edges incident on v
-        ;(println " >mp1" node)
+        (println " >mp1" node)
         (if (and (not= msgs prev-msgs) (== (count msgs) (dec (lg/out-degree graph id))))
          (let [parent (first (set/difference (lg/successors graph id) (into #{} (keys msgs))))
                node (get nodes id)]
@@ -523,7 +523,7 @@
            (let [[return _] (first (set/difference
                                         (into #{} (map (juxt :id :flow) (vals msgs)))
                                         (into #{} (map (juxt :id :flow) (vals prev-msgs)))))]
-             ;(println " >mp2" node)
+             (println " >mp2" node)
              (if (and (<< :pass? node) (= :>< (get-in msgs [return :flow])))
                (if root r (update-in r [:messages id] dissoc return))
                (reduce
@@ -542,6 +542,7 @@
   "The algorithm terminates once two messages have been passed
   over every edge, one in each direction."
   [{:keys [messages graph nodes] :as model}]
+  ;(println "  cm " (empty? messages) (into #{} (keys messages)) (into #{} (mapcat keys (vals messages))))
   (or (empty? messages)
       (not= (into #{} (keys messages))
             (into #{} (mapcat keys (vals messages))))))
