@@ -1,7 +1,7 @@
 (ns sigmapi.test.core
   (:require
     [clojure.test :refer [deftest testing is]]
-    [sigmapi.core :as sp :refer [fgtree make-node  propagate print-msgs msg-diff
+    [sigmapi.core :as sp :refer [fgtree propagate-cycles propagate print-msgs msg-diff
         marginals exp->fg msgs-from-leaves message-passing ln- P
         normalize random-matrix MAP-config combine can-message?
         update-factors]]
@@ -105,7 +105,9 @@
            (:x3 [0.3 0.6 0.1])]))
        (exp->fg :max)
        propagate
-       MAP-config))
+    ;(propagate-cycles 13)
+        MAP-config
+       ))
 
 (defn MHP
   "

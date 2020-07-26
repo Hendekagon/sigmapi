@@ -207,7 +207,7 @@
    [:sp :i :variable] (fn [node] {:value 0})
    [:max :i :variable] [:sp :i :variable]
    [:max :i :factor]
-   (fn [{:keys [cpm id dfn]}] {:value cpm :repr id :dim-for-node dfn})
+   (fn [{:keys [cpm id dfn]}] {:value cpm :dim-for-node dfn})
    [:ssp :>< :factor]
    (fn [{:keys [cpm id dfn]} messages to]
      {
@@ -275,7 +275,6 @@
           :value sum
           :min min
           :configuration (assoc configuration to mto)
-          :repr (cons '∑ (map :repr messages))
           }))
    [:smax :<> :variable]
      (fn [this messages to to-msg parent-msg]
@@ -304,7 +303,7 @@
     (fn q
      ([] m)
      ([msg {:keys [alg kind] :as node} & args]
-      (println ">>" msg alg node args)
+      ;(println ">>" msg alg node args)
       (apply (m [alg msg kind] (fn [node] {:no-implmentation-for [alg msg kind]})) node args)))))
 
 (defn ed [f dm]
@@ -344,7 +343,7 @@
          :messages {}
          :graph g
          :spanning-tree t
-         :leaves (leaves t)
+         :leaves (leaves g)
          :neighbours neighbours
          :nodes
          (into {}
@@ -508,10 +507,8 @@
   [previous-model {:keys [alg << messages graph nodes] :as model}]
   (reduce
     (fn [{root :root :as r} [id msgs]]
-      (println ">mp" root)
       (let [prev-msgs (get-in previous-model [:messages id]) node (get nodes id)]
         ; messages have arrived on all but one of the edges incident on v
-        (println " >mp1" node)
         (if (and (not= msgs prev-msgs) (== (count msgs) (dec (lg/out-degree graph id))))
          (let [parent (first (set/difference (lg/successors graph id) (into #{} (keys msgs))))
                node (get nodes id)]
@@ -523,7 +520,6 @@
            (let [[return _] (first (set/difference
                                         (into #{} (map (juxt :id :flow) (vals msgs)))
                                         (into #{} (map (juxt :id :flow) (vals prev-msgs)))))]
-             (println " >mp2" node)
              (if (and (<< :pass? node) (= :>< (get-in msgs [return :flow])))
                (if root r (update-in r [:messages id] dissoc return))
                (reduce
@@ -562,7 +558,7 @@
 (defn propagate-cycles
   "Propagate messages on the given model's graph
   in both directions"
-  ([m n]
+  ([n m]
     (propagate-cycles message-passing n (assoc m :messages {})))
   ([f n m]
     (last
@@ -665,7 +661,7 @@
                   (zipmap (map :id diff) diff))))
     nm (:messages nm)))
 
-(defn learn-variables [graph post priors data]
+(defn learn-variables [{:keys [fg marginals priors data] {<< :<< :as learned} :learned :as model}]
   (reductions
     (fn [[g post] data-priors]
       (let [
@@ -674,13 +670,13 @@
               g  (update-factors g p1)
             ]
         [g (normalize-vals (marginals (propagate g)))]))
-    [graph (or post (zipmap (keys priors) (map (comp (partial mapv P) :value i (:nodes graph)) (vals priors))))] data))
+    [learned (or marginals (zipmap (keys priors) (map (comp (partial mapv P) :value (partial << :i) (:nodes learned)) (vals priors))))] data))
 
 (defn learned-variables [{:keys [fg learned marginals priors data] :as model}]
   (let [[g m]
           (last
            (learn-variables
-             (or learned (exp->fg :sp fg)) marginals priors data))]
+             (assoc model :learned (or learned (exp->fg :sp fg)))))]
     (-> model
       (assoc :marginals m)
       (assoc :learned g))))
@@ -688,8 +684,8 @@
 (defn learn-step-log
   [{:keys [fg learned log-marginals priors data] :as model}]
       (let [
-              graph (or learned (exp->fg :sp fg))
-              post  (or log-marginals (zipmap (keys priors) (map (comp :value i (:nodes graph)) (vals priors))))
+              {<< :<< :as graph} (or learned (exp->fg :sp fg))
+              post  (or log-marginals (zipmap (keys priors) (map (comp :value (partial << :i) (:nodes graph)) (vals priors))))
               p2    (select-keys post (keys priors))
               p1    (merge (zipmap (vals priors) (map p2 (keys priors))) data)
               g     (update-factors graph p1 :clm)
@@ -701,8 +697,8 @@
 (defn learn-step
   [{:keys [fg learned marginals priors data] :as model}]
       (let [
-             {nodes :nodes :as graph} (or learned (exp->fg :sp fg))
-              post (or marginals (zipmap (keys priors) (map (comp (partial map P) :value i nodes) (map (fn [v] (if (keyword? v) v (last v))) (vals priors)))))
+             {<< :<< nodes :nodes :as graph} (or learned (exp->fg :sp fg))
+              post (or marginals (zipmap (keys priors) (map (comp (partial map P) :value (partial << :i) nodes) (map (fn [v] (if (keyword? v) v (last v))) (vals priors)))))
               p2 (select-keys post (keys priors))
               p1 (merge (zipmap (map (fn [v] (if (keyword? v) v (first v))) (vals priors)) (map p2 (keys priors))) data)
               g (update-factors graph p1)
