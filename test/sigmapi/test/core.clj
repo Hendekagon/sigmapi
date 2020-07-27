@@ -1,7 +1,7 @@
 (ns sigmapi.test.core
   (:require
     [clojure.test :refer [deftest testing is]]
-    [sigmapi.core :as sp :refer [fgtree propagate-cycles propagate print-msgs msg-diff
+    [sigmapi.core :as sp :refer [fgtree >alg propagate-cycles propagate print-msgs msg-diff
         marginals exp->fg msgs-from-leaves message-passing ln- P
         normalize random-matrix MAP-config combine can-message?
         update-factors]]
@@ -103,9 +103,8 @@
             [0.8 0.1 0.1]
             ]
            (:x3 [0.3 0.6 0.1])]))
-       (exp->fg :max)
-       propagate
-    ;(propagate-cycles 13)
+        (exp->fg :max)
+        propagate
         MAP-config
        ))
 
@@ -183,7 +182,7 @@
      {m1 :marginals l :learned :as em0}
        (-> model (assoc :data {:p-door door :p-door-0 door :p-door-1 door :p-your-1st-choice choice :p-your-1st-choice-0 choice}) sp/learn-step)
       m2
-       (-> l (assoc :alg :max) propagate MAP-config)
+       (-> l (>alg :max) propagate MAP-config)
      ]
     (println "  " (select-keys m1 [:door :prize-0 :prize-1 :your-1st-choice :host's-choice :your-2nd-choice]))
     (println "  " m2)

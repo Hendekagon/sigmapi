@@ -147,15 +147,15 @@
 ; mat is a matrix, g is the operation for combining matrices
 (defn combine
   "
-  Returns the product of the given messages
-  using the given function g (e.g. add).
-  Each message's value will have a different dimension
-  so the matrix is transposed so that its last dimension
-  matches. (Broadcast the message's vector would still involve
-  transposing)
-  Finally the result is transposed so the dimension of
-  the destination node to is the first dimension, ready
-  for summing. Hmm maybe that last bit should be a separate fn
+    Returns the product of the given messages
+    using the given function g (e.g. add).
+    Each message's value will have a different dimension
+    so the matrix is transposed so that its last dimension
+    matches. (Broadcast the message's vector would still involve
+    transposing)
+    Finally the result is transposed so the dimension of
+    the destination node to is the first dimension, ready
+    for summing. Hmm maybe that last bit should be a separate fn
   "
   [mat g messages to dim-for-node]
   (let
@@ -195,7 +195,15 @@
        {
         :value sum
         }))
-   [:sp :<> :factor] [:sp :>< :factor]
+   [:sp :<> :factor]
+   (fn [{:keys [cpm id dfn]} messages to to-msg parent-msg]
+     (let [
+           prod (combine cpm m/add messages to dfn)
+           sum (m/emap ln- (map m/esum (m/emap P prod)))
+           ]
+       {
+        :value sum
+        }))
    [:sp :pass? :factor] (fn [node] true)
    [:sp :pass? :variable] (fn [node] false)
    [:max :pass? :factor] [:sp :pass? :factor]
@@ -206,8 +214,9 @@
    [:sp :logspace :variable] [:sp :logspace :factor]
    [:sp :i :variable] (fn [node] {:value 0})
    [:max :i :variable] [:sp :i :variable]
+   [:sp :i :factor] [:max :i :factor]
    [:max :i :factor]
-   (fn [{:keys [cpm id dfn]}] {:value cpm :dim-for-node dfn})
+     (fn [{:keys [cpm id dfn]}] {:value cpm :dim-for-node dfn})
    [:ssp :>< :factor]
    (fn [{:keys [cpm id dfn]} messages to]
      {
@@ -256,55 +265,58 @@
       :repr (cons '∑ (map :repr messages))
       })
    [:max :<> :variable]
-     (fn [{:keys [cpm id dfn]} messages to to-msg parent-msg]
-       (let
-         [
-          ; to-msg is the msg received by this node from to on the >< pass,
-          ; which contains the indices of the other variables for each of this variable's states.
-          ; Here we are telling to its configuration and the configurations of all previous variables
-          ; In the outflowing messaging, the root variable node uses all its messages
-          sum (apply m/add (map :value (cons to-msg messages)))
-          min (indexed-min sum)
-          ; look up the configuration we got in the forward pass which lead to this minimum
-          ; (for the root - others need to use the indices they got from the parent)
-          conf (if parent-msg (get-in parent-msg [:configuration id]) (get-in min [1 0]))
-          configuration (if parent-msg (:configuration parent-msg) {id conf})
-          mto (get-in to-msg [:im conf 1])
-          ]
-         {
-          :value sum
-          :min min
-          :configuration (assoc configuration to mto)
-          }))
+   (fn [{:keys [cpm id dfn]} messages to to-msg parent-msg]
+     (let
+       [
+        ; to-msg is the msg received by this node from to on the >< pass,
+        ; which contains the indices of the other variables for each of this variable's states.
+        ; Here we are telling to its configuration and the configurations of all previous variables
+        ; In the outflowing messaging, the root variable node uses all its messages
+        sum (apply m/add (map :value (cons to-msg messages)))
+        min (indexed-min sum)
+        ; look up the configuration we got in the forward pass which lead to this minimum
+        ; (for the root - others need to use the indices they got from the parent)
+        conf (if parent-msg (get-in parent-msg [:configuration id]) (get-in min [1 0]))
+        configuration (if parent-msg (:configuration parent-msg) {id conf})
+        mto (get-in to-msg [:im conf 1])
+        ]
+       {
+        :value sum
+        :min min
+        :configuration (assoc configuration to mto)
+        }))
    [:smax :<> :variable]
-     (fn [this messages to to-msg parent-msg]
-       {
-        :repr (cons '∑ (map :repr messages))
-        })
+   (fn [this messages to to-msg parent-msg]
+     {
+      :repr (cons '∑ (map :repr messages))
+      })
    [:sp :>< :variable]
-     (fn [{:keys [f id dim-for-node]} messages to]
-       {
-        :value (apply m/add (map :value messages))
-        })
-   [:sp :<> :variable] [:sp :>< :variable]
+   (fn [{:keys [f id dim-for-node]} messages to]
+     {
+      :value (apply m/add (map :value messages))
+      })
+   [:sp :<> :variable]
+     (fn [{:keys [f id dim-for-node]} messages to to-msg parent-msg]
+     {
+      :value (apply m/add (map :value messages))
+      })
    [:ssp :>< :variable]
-     (fn [{:keys [f id dim-for-node]} messages to]
-       {
-        :value (if (== 1 (count messages)) (:repr (first messages)) (cons '∏ (map :repr messages)))
-        })
+   (fn [{:keys [f id dim-for-node]} messages to]
+     {
+      :value (if (== 1 (count messages)) (:repr (first messages)) (cons '∏ (map :repr messages)))
+      })
    [:qwe :<> :factor]
    (fn [node] {:value 7})
    [:qwe :<> :variable]
    (fn [node] {:value 88})
    })
 
-(defn message [dm]
+(defn message [alg dm]
   (let [m (rmap dm)]
     (fn q
      ([] m)
-     ([msg {:keys [alg kind] :as node} & args]
-      ;(println ">>" msg alg node args)
-      (apply (m [alg msg kind] (fn [node] {:no-implmentation-for [alg msg kind]})) node args)))))
+     ([msg {:keys [kind] :as node} & args]
+        (apply (m [alg msg kind] (fn [node] {:no-implmentation-for [alg msg kind]})) node args)))))
 
 (defn ed [f dm]
   (message (rmap (merge (f) dm))))
@@ -333,17 +345,17 @@
   "
   ([alg edges]
       (let [g (apply lg/graph (map (partial map :id) edges))
-            t (lg/digraph (la/bf-span g (:id (ffirst edges))))
+            t (lg/graph (la/bf-span g (:id (ffirst edges))))
             nodes (into {} (map (juxt :id identity) (mapcat identity edges)))
             neighbours (neighbourz edges)
             ]
         {
-         :<< (message (dmm))
+         :<< (message alg (dmm))
          :alg alg
          :messages {}
          :graph g
          :spanning-tree t
-         :leaves (leaves g)
+         :leaves (leaves t)
          :neighbours neighbours
          :nodes
          (into {}
@@ -356,6 +368,11 @@
                       :mfn (zipmap (neighbours id) (map (fn [j] (get-in nodes [j :matrix])) (neighbours id)))}
                      {:alg alg :kind :variable :id id})])
              (lg/nodes g)))})))
+
+(defn >alg [model alg]
+  (-> model
+    (assoc :alg alg)
+    (assoc :<< (message alg (dmm)))))
 
 (defn matrices-as-vectors [fg]
   (reduce
@@ -526,8 +543,9 @@
                  (fn [r parent]
                    (assoc
                      (assoc-in r [:messages parent id]
-                       (assoc (<< :<> node (vals (dissoc msgs parent)) parent (get msgs parent)
-                          (if root (get msgs return) nil))
+                       (assoc
+                         (<< :<> node (vals (dissoc msgs parent)) parent (get msgs parent)
+                            (if root (get msgs return) nil))
                           :flow :<> :id id))
                      :root id))
                  r (keys (if root (dissoc msgs return) msgs)))))
