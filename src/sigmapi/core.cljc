@@ -391,7 +391,7 @@
   ([{g :graph alg :alg << :<< nodes :nodes :as model} matrices cmkey]
     (reduce
      (fn [model [id mat]]
-       (assoc-in model [:nodes id cmkey] (m/matrix mat)))
+       (assoc-in model [:nodes id cmkey] (m/emap ln- (m/matrix mat))))
      model matrices)))
 
 ; make this work with one edge

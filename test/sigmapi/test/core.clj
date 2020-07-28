@@ -103,9 +103,9 @@
             [0.8 0.1 0.1]
             ]
            (:x3 [0.3 0.6 0.1])]))
-        (exp->fg :max)
+        (exp->fg :sp)
         propagate
-        MAP-config
+        marginals
        ))
 
 (defn MHP
