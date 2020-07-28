@@ -184,17 +184,18 @@
       m2
        (-> l (>alg :max) propagate MAP-config)
      ]
-    (println "  " (select-keys m1 [:door :prize-0 :prize-1 :your-1st-choice :host's-choice :your-2nd-choice]))
-    (println "  " m2)
-    (println)
-    (println "--------")
-    (println)
-    (println (apply str " car is      " (assoc '[🚪 🚪 🚪] (:door m2) '🚗)))
-    (println (apply str " you chose   " (assoc '[🚪 🚪 🚪] (:your-1st-choice m2) '🀆)))
-    (println (apply str " host opened " (assoc '[🚪 🚪 🚪] (:host's-choice m2) '🐐)))
-    (println (apply str " you chose   " (assoc '[🚪 🚪 🚪] (:your-2nd-choice m2) '🀆 (:host's-choice m2) '🐐)))
-    (println (apply str "             " (assoc '[🐐 🐐 🐐] (:your-2nd-choice m2) '🀆 (:door m2) '🚗)))
-    (println)
-    (println (if (== 1 (:prize-1 m2)) "you won!" "you lost"))
-    (if (== 1 (:prize-1 m2)) '🚗 '🐐)
+    [(select-keys m1 [:door :prize-0 :prize-1 :your-1st-choice :host's-choice :your-2nd-choice])
+     m2
+     ""
+     "--------"
+     ""
+     (apply str " car is      " (assoc '[🚪 🚪 🚪] (:door m2) '🚗))
+     (apply str " you chose   " (assoc '[🚪 🚪 🚪] (:your-1st-choice m2) '🀆))
+     (apply str " host opened " (assoc '[🚪 🚪 🚪] (:host's-choice m2) '🐐))
+     (apply str " you chose   " (assoc '[🚪 🚪 🚪] (:your-2nd-choice m2) '🀆 (:host's-choice m2) '🐐))
+     (apply str "             " (assoc '[🐐 🐐 🐐] (:your-2nd-choice m2) '🀆 (:door m2) '🚗))
+     ""
+     (if (== 1 (:prize-1 m2)) "you won!" "you lost")
+     (if (== 1 (:prize-1 m2)) '🚗 '🐐)
+     ]
     ))
