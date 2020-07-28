@@ -362,11 +362,11 @@
            (map
              (fn [id]
                [id (if-let [mat (get-in nodes [id :matrix])]
-                     {:alg alg :kind :factor :graph g :id id
-                      :cpm (m/matrix mat)
+                     {:kind :factor :graph g :id id
+                      :cpm (m/matrix (m/emap ln- mat))
                       :dfn (zipmap (neighbours id) (range))
                       :mfn (zipmap (neighbours id) (map (fn [j] (get-in nodes [j :matrix])) (neighbours id)))}
-                     {:alg alg :kind :variable :id id})])
+                     {:kind :variable :id id})])
              (lg/nodes g)))})))
 
 (defn >alg [model alg]
@@ -391,8 +391,7 @@
   ([{g :graph alg :alg << :<< nodes :nodes :as model} matrices cmkey]
     (reduce
      (fn [model [id mat]]
-       (let [n (nodes id) {dfn :dim-for-node} (<< :i n)]
-         (assoc-in model [:nodes id] {:alg alg :kind :factor :graph g :id id cmkey (m/matrix mat) :dfn dfn})))
+       (assoc-in model [:nodes id cmkey] (m/matrix mat)))
      model matrices)))
 
 ; make this work with one edge
@@ -556,7 +555,6 @@
   "The algorithm terminates once two messages have been passed
   over every edge, one in each direction."
   [{:keys [messages graph nodes] :as model}]
-  ;(println "  cm " (empty? messages) (into #{} (keys messages)) (into #{} (mapcat keys (vals messages))))
   (or (empty? messages)
       (not= (into #{} (keys messages))
             (into #{} (mapcat keys (vals messages))))))
