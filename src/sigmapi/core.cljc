@@ -88,18 +88,6 @@
     (repeatedly f rand)
     (repeatedly f (partial random-matrix r))))
 
-(comment
-  "
-    Protocols
-    There are 2 types of node in a factor graph: Variable and Factor
-    There are several algorithms that can be run on a factor graph,
-    each of which causes different kinds of messages to be exchanged.
-    The only constant is the messaging itself, and that each node must
-    have product (x) and identity (i) functions. Product doesn't mean
-    multiplication necessarily, it just means the ability to combine
-    messages into one.
-  ")
-
 (defn indexed-best
   "
     Returns list of the best (according to the given function f)
@@ -186,24 +174,17 @@
 
 (defn dmm []
   {
-   [:sp :>< :factor]
-   (fn [{:keys [cpm id dfn]} messages to]
-     (let [
-           prod (combine cpm m/add messages to dfn)
-           sum (m/emap ln- (map m/esum (m/emap P prod)))
-           ]
-       {
-        :value sum
-        }))
+   [:sp :>< :factor] [:sp :<> :factor]
    [:sp :<> :factor]
-   (fn [{:keys [cpm id dfn]} messages to to-msg parent-msg]
-     (let [
-           prod (combine cpm m/add messages to dfn)
-           sum (m/emap ln- (map m/esum (m/emap P prod)))
-           ]
-       {
-        :value sum
-        }))
+   (fn w
+     ([{:keys [cpm id dfn]} messages to]
+      (let [
+            prod (combine cpm m/add messages to dfn)
+            sum (m/emap ln- (map m/esum (m/emap P prod)))
+            ]
+        {:value sum}))
+     ([node messages to to-msg parent-msg]
+      (w node messages to)))
    [:sp :pass? :factor] (fn [node] true)
    [:sp :pass? :variable] (fn [node] false)
    [:max :pass? :factor] [:sp :pass? :factor]
@@ -216,7 +197,7 @@
    [:max :i :variable] [:sp :i :variable]
    [:sp :i :factor] [:max :i :factor]
    [:max :i :factor]
-     (fn [{:keys [cpm id dfn]}] {:value cpm :dim-for-node dfn})
+   (fn [{:keys [cpm id dfn]}] {:value cpm :dim-for-node dfn})
    [:ssp :>< :factor]
    (fn [{:keys [cpm id dfn]} messages to]
      {
@@ -291,19 +272,19 @@
       :repr (cons '∑ (map :repr messages))
       })
    [:sp :>< :variable]
-   (fn [{:keys [f id dim-for-node]} messages to]
-     {
-      :value (apply m/add (map :value messages))
-      })
-   [:sp :<> :variable]
-     (fn [{:keys [f id dim-for-node]} messages to to-msg parent-msg]
-     {
-      :value (apply m/add (map :value messages))
-      })
+   (fn w
+     ([node messages to to-msg parent-msg]
+       (w node messages to))
+     ([{:keys [f id dim-for-node]} messages to]
+       {:value (apply m/add (map :value messages))}))
+   [:sp :<> :variable] [:sp :>< :variable]
    [:ssp :>< :variable]
    (fn [{:keys [f id dim-for-node]} messages to]
      {
-      :value (if (== 1 (count messages)) (:repr (first messages)) (cons '∏ (map :repr messages)))
+      :value
+        (if (== 1 (count messages))
+          (:repr (first messages))
+          (cons '∏ (map :repr messages)))
       })
    [:qwe :<> :factor]
    (fn [node] {:value 7})
@@ -338,6 +319,25 @@
     (partial leaf? g)
     (lg/nodes g)))
 
+; need to look up only factors and need to
+; find which priors for which variables
+(defn dimension-check [{:keys [nodes neighbours]}]
+  (remove nil?
+    (map
+       (fn [[id {mat :cpm}]]
+         (let [dc (m/dimensionality mat) nc (count (neighbours id))
+               dd (map (fn [i jd x y] [i jd x y (== x y)])
+                    (range)
+                    (neighbours id)
+                    (map (partial m/dimension-count mat) (range dc))
+                    (map (fn [j] (m/dimension-count (nodes j) 0)) (neighbours id)))]
+           (cond
+             (not= dc nc) {:error :matrix-dimensionality-not-equal-neighbour-count
+                           :id id :neighbours nc :dimensionality dc :matrix mat}
+             (some last dd) {:error :incompatible-dimension :id id :dimensions dd}
+             :default nil)))
+      (filter (comp #{:factor} :kind val) nodes))))
+
 (defn edges->fg
   "
   TODO: need to check shape of graph and
@@ -358,16 +358,16 @@
          :leaves (leaves t)
          :neighbours neighbours
          :nodes
-         (into {}
-           (map
-             (fn [id]
-               [id (if-let [mat (get-in nodes [id :matrix])]
-                     {:kind :factor :graph g :id id
-                      :cpm (m/matrix (m/emap ln- mat))
-                      :dfn (zipmap (neighbours id) (range))
-                      :mfn (zipmap (neighbours id) (map (fn [j] (get-in nodes [j :matrix])) (neighbours id)))}
-                     {:kind :variable :id id})])
-             (lg/nodes g)))})))
+           (into {}
+             (map
+               (fn [id]
+                 [id (if-let [mat (get-in nodes [id :matrix])]
+                       {:kind :factor :graph g :id id
+                        :cpm (m/matrix (m/emap ln- mat))
+                        :dfn (zipmap (neighbours id) (range))
+                        :mfn (zipmap (neighbours id) (map (fn [j] (get-in nodes [j :matrix])) (neighbours id)))}
+                       {:kind :variable :id id})])
+               (lg/nodes g)))})))
 
 (defn >alg [model alg]
   (-> model
@@ -415,7 +415,11 @@
 (defn exp->fg
   "Return a factor graph for the given expression"
   [alg exp]
-  (edges->fg alg (as-edges exp)))
+  (let [m (edges->fg alg (as-edges exp))
+        e (dimension-check m)]
+    (if (and false (> (count e) 0))
+      (throw (ex-info "Problem with graph" {:error e}))
+      m)))
 
 (defn prior-nodes [{:keys [graph nodes] :as model}]
   (into {}

@@ -2,12 +2,13 @@
   (:require
     [clojure.test :refer [deftest testing is]]
     [sigmapi.core :as sp :refer [fgtree >alg propagate-cycles propagate print-msgs msg-diff
-        marginals exp->fg msgs-from-leaves message-passing ln- P
-        normalize random-matrix MAP-config combine can-message?
-        update-factors]]
+                                 marginals exp->fg msgs-from-leaves message-passing ln- P
+                                 normalize random-matrix MAP-config combine can-message?
+                                 update-factors]]
     [clojure.core.matrix :as m]
     [loom.graph :as lg]
-    [loom.alg :as la]))
+    [loom.alg :as la]
+    [clojure.string :as string]))
 
 (defn figure7
   "Figure 7 in Frey2001 Factor graphs and the sum product algorithm"
@@ -120,6 +121,8 @@
      He then says to you,
      'Do you want to pick door No. 2?'
      Is it to your advantage to switch your choice ?
+
+     (MHP {:correct-door 2 :choose-door 0})
   "
   [{door-number :correct-door choose-door-number :choose-door dp :dp cp :cp}]
   (let
@@ -184,18 +187,26 @@
       m2
        (-> l (>alg :max) propagate MAP-config)
      ]
-    [(select-keys m1 [:door :prize-0 :prize-1 :your-1st-choice :host's-choice :your-2nd-choice])
-     m2
-     ""
-     "--------"
-     ""
-     (apply str " car is      " (assoc '[🚪 🚪 🚪] (:door m2) '🚗))
-     (apply str " you chose   " (assoc '[🚪 🚪 🚪] (:your-1st-choice m2) '🀆))
-     (apply str " host opened " (assoc '[🚪 🚪 🚪] (:host's-choice m2) '🐐))
-     (apply str " you chose   " (assoc '[🚪 🚪 🚪] (:your-2nd-choice m2) '🀆 (:host's-choice m2) '🐐))
-     (apply str "             " (assoc '[🐐 🐐 🐐] (:your-2nd-choice m2) '🀆 (:door m2) '🚗))
-     ""
-     (if (== 1 (:prize-1 m2)) "you won!" "you lost")
-     (if (== 1 (:prize-1 m2)) '🚗 '🐐)
-     ]
+    {
+     :marginals (select-keys m1 [:door :prize-0 :prize-1 :your-1st-choice :host's-choice :your-2nd-choice])
+     :configuration m2
+     :model l
+     :message
+     (string/join "\n"
+       [
+        ""
+        (apply str " car is      " (assoc '[🚪 🚪 🚪] (:door m2) '🚗))
+        (apply str " you chose   " (assoc '[🚪 🚪 🚪] (:your-1st-choice m2) '🀆))
+        (apply str " host opened " (assoc '[🚪 🚪 🚪] (:host's-choice m2) '🐐))
+        (apply str " you chose   " (assoc '[🚪 🚪 🚪] (:your-2nd-choice m2) '🀆 (:host's-choice m2) '🐐))
+        (apply str "             " (assoc '[🐐 🐐 🐐] (:your-2nd-choice m2) '🀆 (:door m2) '🚗))
+        ""
+        (str
+          (if (== 1 (:prize-1 m2)) " you won! " " you lost ")
+          (if (== 1 (:prize-1 m2)) '🚗 '🐐))
+        ""
+        (str " had you stuck with your first choice you would have " (if (== 1 (:prize-0 m2)) "won" "lost"))
+        ""
+        ])
+     }
     ))
