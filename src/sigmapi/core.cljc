@@ -96,7 +96,10 @@
   [f]
   (fn ibf [mat]
     (let [best (f mat)]
-      [best (first (filter #(= best (apply m/mget mat %))
+      [best
+        (first
+          (filter
+            (fn [i] (== best (apply m/mget mat i)))
             (m/index-seq mat)))])))
 
 (def indexed-min (indexed-best m/emin))
@@ -125,8 +128,7 @@
     (tranz mat (vec (range (m/dimensionality mat))) i f))
   ([mat v i f]
    (let [rv (rotate-vec v i f)
-         tm (m/transpose mat rv)
-         ]
+         tm (m/transpose mat rv)]
     [tm rv
       (rotate-vec v
         (mod (- (dec (m/dimensionality mat)) i) (m/dimensionality mat))
@@ -172,6 +174,7 @@
     m
     (sort-by (comp vector? val) m)))
 
+; TODO complete smax and ssp
 (defn dmm []
   {
    [:sp :>< :factor] [:sp :<> :factor]
@@ -189,25 +192,59 @@
    [:sp :pass? :variable] (fn [node] false)
    [:max :pass? :factor] [:sp :pass? :factor]
    [:max :pass? :variable] [:sp :pass? :variable]
+   [:mat :pass? :factor] [:sp :pass? :factor]
+   [:mat :pass? :variable] [:sp :pass? :variable]
+   [:smax :pass? :variable] [:sp :pass? :variable]
+   [:smax :pass? :factor] [:sp :pass? :factor]
    [:sp :logspace :factor] (fn [this x] (m/emap P x))
    [:max :logspace :factor] [:sp :logspace :factor]
    [:max :logspace :variable] [:sp :logspace :factor]
    [:sp :logspace :variable] [:sp :logspace :factor]
    [:sp :i :variable] (fn [node] {:value 0})
-   [:max :i :variable] [:sp :i :variable]
-   [:sp :i :factor] [:max :i :factor]
-   [:max :i :factor]
+   [:sp :i :factor]
    (fn [{:keys [cpm id dfn]}] {:value cpm :dim-for-node dfn})
+   [:max :i :variable] [:sp :i :variable]
+   [:max :i :factor] [:sp :i :factor]
+   [:mat :i :variable] [:sp :i :variable]
+   [:mat :i :factor] [:sp :i :factor]
    [:ssp :>< :factor]
    (fn [{:keys [cpm id dfn]} messages to]
      {
       :value (cons '∑ (list (cons '∏ (list id (if (== 1 (count messages)) (:repr (first messages)) (map :repr messages))))))
       })
    [:smax :>< :factor]
-   (fn [{:keys [cpm id dfn]} messages to]
-     {
-      :value (list 'min (cons '∑ (cons id (map :repr messages))))
-      })
+   (fn w
+     ([node messages to to-msg parent-msg]
+      (w node messages to))
+     ([{:keys [cpm id dfn]} messages to]
+      {
+       :value (list 'min (cons '∑ (cons id (map :repr messages))))
+       }))
+   [:mat :>< :factor]
+   (fn w
+     ([node messages to to-msg parent-msg]
+      (w node messages to))
+     ([{:keys [cpm id dfn]} messages to]
+      {
+       :value (mapv :value messages)
+       :mat messages
+       }))
+   [:mat :<> :factor]
+   (fn w
+     ([node messages to to-msg parent-msg]
+      (w node messages to))
+     ([{:keys [cpm id dfn]} messages to]
+      {
+       :value (mapv :value messages)
+       :mat messages
+       }))
+   [:mat :>< :variable]
+   (fn w
+     ([node messages to to-msg parent-msg]
+      (w node messages to))
+     ([{:keys [f id dim-for-node]} messages to]
+      {:value (map :value messages)}))
+   [:mat :<> :variable] [:mat :>< :variable]
    [:max :>< :factor]
    (fn [{:keys [cpm id dfn]} messages to]
      (let [
@@ -271,20 +308,21 @@
      {
       :repr (cons '∑ (map :repr messages))
       })
+   [:smax :i :factor] (fn [{:keys [id] :as node}] {:value id})
    [:sp :>< :variable]
    (fn w
      ([node messages to to-msg parent-msg]
-       (w node messages to))
+      (w node messages to))
      ([{:keys [f id dim-for-node]} messages to]
-       {:value (apply m/add (map :value messages))}))
+      {:value (apply m/add (map :value messages))}))
    [:sp :<> :variable] [:sp :>< :variable]
    [:ssp :>< :variable]
    (fn [{:keys [f id dim-for-node]} messages to]
      {
       :value
-        (if (== 1 (count messages))
-          (:repr (first messages))
-          (cons '∏ (map :repr messages)))
+      (if (== 1 (count messages))
+        (:repr (first messages))
+        (cons '∏ (map :repr messages)))
       })
    [:qwe :<> :factor]
    (fn [node] {:value 7})
@@ -297,7 +335,8 @@
     (fn q
      ([] m)
      ([msg {:keys [kind] :as node} & args]
-        (apply (m [alg msg kind] (fn [node] {:no-implmentation-for [alg msg kind]})) node args)))))
+        (apply (m [alg msg kind]
+          (fn [node] (throw (ex-info "Can't make graph, see (ex-data *e)" {:no-implmentation-for [alg msg kind]})))) node args)))))
 
 (defn ed [f dm]
   (message (rmap (merge (f) dm))))
@@ -318,6 +357,7 @@
   (filter
     (partial leaf? g)
     (lg/nodes g)))
+
 
 ; need to look up only factors and need to
 ; find which priors for which variables
@@ -406,20 +446,31 @@
               (as-edges c
                 (conj r
                   [(let [f {:id (first exp)}] (if (vector? exp) (assoc f :matrix (second exp)) f))
-                   (if (vector? c)
-                    {:id (first c) :matrix (second c)}
-                    {:id (first c)})])))
+                   (cond
+                    (and (list? c) (number? (first (second c))))
+                     {:id (keyword (str "p-" (name (first c))))
+                      :matrix (m/matrix (repeat (first (second c)) (/ 1 (first (second c)))))}
+                    (and (vector? c) (number? (first c)))
+                     {:id (keyword (str "p-" (name (first exp))))
+                      :matrix (m/matrix (repeat (first c) (/ 1 (first c))))}
+                    (vector? c) {:id (first c) :matrix (second c)}
+                    :default {:id (first c)})])))
           edges branches))
       edges)))
 
-(defn exp->fg
+(defn edgez->fg
   "Return a factor graph for the given expression"
-  [alg exp]
-  (let [m (edges->fg alg (as-edges exp))
+  [alg edges]
+  (let [m (edges->fg alg edges)
         e (dimension-check m)]
     (if (and false (> (count e) 0))
       (throw (ex-info "Problem with graph" {:error e}))
       m)))
+
+(defn exp->fg
+  "Return a factor graph for the given expression"
+  [alg exp]
+  (edges->fg alg (as-edges exp)))
 
 (defn prior-nodes [{:keys [graph nodes] :as model}]
   (into {}
@@ -595,6 +646,15 @@
     (map
       (juxt key
         (comp (fn [v] (if (== 1 (m/dimensionality v)) (normalize v) (vec (map normalize v)))) val)) m)))
+
+(defn marginalz
+  "Returns a map of marginals for the nodes of the given model"
+  [{:keys [<< messages graph nodes] :as model}]
+  (into {}
+    (map
+      (fn [[id node]]
+        [id (vec (m/emap P (maybe-list (:value (<< :<> node (vals (get messages id)) nil nil nil)))))])
+      (filter (comp (fn [n] (= :factor (:kind n))) val) nodes))))
 
 (defn marginals
   "Returns a map of marginals for the nodes of the given model"

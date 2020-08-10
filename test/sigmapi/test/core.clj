@@ -67,26 +67,40 @@
   every value equal to the sum of its dimensions"
     (is (m/equals (test-cbt) (m/fill (m/new-array [2 3 4 5]) (reduce + [2 3 4 5]))))))
 
-(deftest test-max-configuration
-  (testing "That a simple graph (a branch, x2->x1<-x3) returns max config"
-    (->>
-      (fgtree
-        (:x1
-          [:x1x2
-           [
-            [0.1 0.2 0.7]
-            [0.6 0.2 0.2]
-            ]
-           (:x2 [0.2 0.8])]
-          [:x1x3
-           [
-            [0.5 0.1 0.4]
-            [0.8 0.1 0.1]
-            ]
-           (:x3 [0.3 0.6 0.1])]))
-      exp->fg :max
-      propagate
-      MAP-config)))
+(defn t0 []
+  (fgtree
+      (:x1
+        [:px1 [0.3 0.3 0.3]]
+        [:x1x2
+         [
+           [0.1 0.8]
+           [0.8 0.1]
+           [0.1 0.1]
+         ]
+         (:x2 [:px2 [0.1 0.9]])]
+        [:x1x3
+         [
+           [0.1 0.1 0.8 0.1]
+           [0.1 0.8 0.1 0.1]
+           [0.8 0.1 0.1 0.8]
+         ]
+         (:x3 [:px3 [0.1 0.7 0.1 0.1]])])))
+
+(defn t00 []
+  '(:x1 [3]
+    [:x1x2 []
+     (:x2 [4])]
+    [:x1x3 []
+     (:x3 [5])]))
+
+(defn test-max-configuration
+  "That a simple graph (a branch, x2->x1<-x3) returns max config"
+  []
+  (->>
+    (t0)
+    (exp->fg :max)
+    propagate
+    MAP-config))
 
 (defn t1 []
   (->>
@@ -108,6 +122,9 @@
         propagate
         marginals
        ))
+
+
+
 
 (defn MHP
   "
