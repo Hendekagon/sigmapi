@@ -202,7 +202,7 @@
    [:sp :logspace :variable] [:sp :logspace :factor]
    [:sp :i :variable] (fn [node] {:value 0})
    [:sp :i :factor]
-   (fn [{:keys [cpm id dfn]}] {:value cpm :dim-for-node dfn})
+   (fn [{:keys [cpm id dfn]}] {:value [cpm] :dim-for-node dfn})
    [:max :i :variable] [:sp :i :variable]
    [:max :i :factor] [:sp :i :factor]
    [:mat :i :variable] [:sp :i :variable]
@@ -220,22 +220,14 @@
       {
        :value (list 'min (cons '∑ (cons id (map :repr messages))))
        }))
-   [:mat :>< :factor]
-   (fn w
-     ([node messages to to-msg parent-msg]
-      (w node messages to))
-     ([{:keys [cpm id dfn]} messages to]
-      {
-       :value (mapv :value messages)
-       :mat messages
-       }))
+   [:mat :>< :factor] [:mat :<> :factor]
    [:mat :<> :factor]
    (fn w
      ([node messages to to-msg parent-msg]
       (w node messages to))
      ([{:keys [cpm id dfn]} messages to]
       {
-       :value (mapv :value messages)
+       :value (mapcat :value messages)
        :mat messages
        }))
    [:mat :>< :variable]
@@ -243,7 +235,7 @@
      ([node messages to to-msg parent-msg]
       (w node messages to))
      ([{:keys [f id dim-for-node]} messages to]
-      {:value (map :value messages)}))
+      {:value (map (fn [{v :value}] (if (vector? (first v)) (first v) v)) messages)}))
    [:mat :<> :variable] [:mat :>< :variable]
    [:max :>< :factor]
    (fn [{:keys [cpm id dfn]} messages to]
@@ -647,13 +639,14 @@
       (juxt key
         (comp (fn [v] (if (== 1 (m/dimensionality v)) (normalize v) (vec (map normalize v)))) val)) m)))
 
-(defn marginalz
-  "Returns a map of marginals for the nodes of the given model"
+(defn mat-dimensions
+  "Returns a map of matrix dimensions of the given model
+   which has been propogated with :mat alg"
   [{:keys [<< messages graph nodes] :as model}]
   (into {}
     (map
       (fn [[id node]]
-        [id (vec (m/emap P (maybe-list (:value (<< :<> node (vals (get messages id)) nil nil nil)))))])
+        [id (mapv count (:value (<< :<> node (vals (get messages id)) nil nil nil)))])
       (filter (comp (fn [n] (= :factor (:kind n))) val) nodes))))
 
 (defn marginals
