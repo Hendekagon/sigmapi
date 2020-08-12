@@ -428,10 +428,20 @@
 
 ; make this work with one edge
 (defn as-edges
+  "
+    Returns a list of edges [from to]
+    from the given expression
+
+    Accepts empty vectors [] to mean
+    matrices to be constructed later,
+    and single number vectors [n] to
+    mean 'make a prior of n states'
+    (priors currently uniform)
+  "
   ([exp]
     (as-edges exp []))
   ([exp edges]
-    (if (and (seqable? exp) (keyword? (first exp)) (or (keyword? (first (first (rest exp)))) (keyword? (first (second (rest exp))))))
+    (if (and (seqable? exp) (or (keyword? (first exp)) (keyword? (first (first (rest exp)))) (keyword? (first (second (rest exp))))))
       (let [branches (if (vector? exp) (rest (rest exp)) (rest exp))]
         (reduce
           (fn [r c]
@@ -439,9 +449,13 @@
                 (conj r
                   [(let [f {:id (first exp)}] (if (vector? exp) (assoc f :matrix (second exp)) f))
                    (cond
+                    (and (list? c) (number? (first (last c))))
+                     {:id (first c)}
+                    (and (vector? c) (number? (first c)))
+                     {:id (keyword (str "p-" (name (first exp))))
+                      :matrix (m/matrix (repeat (first c) (/ 1 (first c))))}
                     (and (list? c) (number? (first (second c))))
-                     {:id (keyword (str "p-" (name (first c))))
-                      :matrix (m/matrix (repeat (first (second c)) (/ 1 (first (second c)))))}
+                      {:id (first c)}
                     (and (vector? c) (number? (first c)))
                      {:id (keyword (str "p-" (name (first exp))))
                       :matrix (m/matrix (repeat (first c) (/ 1 (first c))))}
