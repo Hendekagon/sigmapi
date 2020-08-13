@@ -206,7 +206,8 @@
    [:max :i :variable] [:sp :i :variable]
    [:max :i :factor] [:sp :i :factor]
    [:mat :i :variable] [:sp :i :variable]
-   [:mat :i :factor] [:sp :i :factor]
+   [:mat :i :factor]
+   (fn [{:keys [cpm id dfn]}] {:value cpm :dim-for-node dfn})
    [:ssp :>< :factor]
    (fn [{:keys [cpm id dfn]} messages to]
      {
@@ -227,15 +228,16 @@
       (w node messages to))
      ([{:keys [cpm id dfn]} messages to]
       {
-       :value (mapcat :value messages)
+       :value (map (comp first :value) (sort-by (comp dfn :id) messages))
        :mat messages
        }))
    [:mat :>< :variable]
    (fn w
      ([node messages to to-msg parent-msg]
       (w node messages to))
-     ([{:keys [f id dim-for-node]} messages to]
-      {:value (map (fn [{v :value}] (if (vector? (first v)) (first v) v)) messages)}))
+     ([{:keys [f id dfn]} messages to]
+      {:value (map :value
+                messages)}))
    [:mat :<> :variable] [:mat :>< :variable]
    [:max :>< :factor]
    (fn [{:keys [cpm id dfn]} messages to]
@@ -366,9 +368,11 @@
            (cond
              (not= dc nc) {:error :matrix-dimensionality-not-equal-neighbour-count
                            :id id :neighbours nc :dimensionality dc :matrix mat}
-             (some last dd) {:error :incompatible-dimension :id id :dimensions dd}
+             (some last dd) {:error :incompatible-dimension :id id :dimensions dd
+                             :shape (m/shape mat) :neighbours (neighbours id)}
              :default nil)))
-      (filter (comp #{:factor} :kind val) nodes))))
+      (filter (fn [[k v]] (and (= :factor (:kind v))
+                               (> (m/dimensionality (:cpm v)) 1))) nodes))))
 
 (defn edges->fg
   "
@@ -426,7 +430,6 @@
        (assoc-in model [:nodes id cmkey] (m/emap ln- (m/matrix mat))))
      model matrices)))
 
-; make this work with one edge
 (defn as-edges
   "
     Returns a list of edges [from to]
@@ -711,6 +714,12 @@
 (defn compute-MAP-config [exp]
   (MAP-config
     (propagate (exp->fg :max exp))))
+
+(defn with-random-factors [alg exp]
+  (let [{g :graph :as m} (exp->fg :mat exp)
+        md (into {} (remove (comp (partial == 1) first val) (-> m propagate mat-dimensions)))]
+    (update-factors (>alg m :sp)
+      (zipmap (keys md) (map random-matrix (vals md))))))
 
 (defn as-states [config model]
   (into {}

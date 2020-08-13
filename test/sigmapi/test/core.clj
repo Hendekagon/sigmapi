@@ -86,14 +86,23 @@
          ]
          (:x3 [:px3 [0.1 0.7 0.1 0.1]])])))
 
+(defn t0x []
+  (fgtree
+      (:x1
+        [3]
+        [:x1x2 []
+         (:x2 [2])]
+        [:x1x3 []
+         (:x3 [4])])))
+
 (defn t00 []
-  '(:x1 [3]
-    [:x1x2 []
-     (:x2 [4]
-       [:x4x2 []
-         (:x4 [5])])]
-    [:x1x3 []
-     (:x3 [5])]))
+  '(:x3 [3]
+    [:x3x4 []
+     (:x4 [4]
+       [:x4x5 []
+         (:x5 [5])])]
+    [:x3x2 []
+     (:x2 [2])]))
 
 (defn test-max-configuration
   "That a simple graph (a branch, x2->x1<-x3) returns max config"
