@@ -202,7 +202,7 @@
    [:sp :logspace :variable] [:sp :logspace :factor]
    [:sp :i :variable] (fn [node] {:value 0})
    [:sp :i :factor]
-   (fn [{:keys [cpm id dfn]}] {:value [cpm] :dim-for-node dfn})
+   (fn [{:keys [cpm id dfn]}] {:value cpm :dim-for-node dfn})
    [:max :i :variable] [:sp :i :variable]
    [:max :i :factor] [:sp :i :factor]
    [:mat :i :variable] [:sp :i :variable]
@@ -452,6 +452,8 @@
                 (conj r
                   [(let [f {:id (first exp)}] (if (vector? exp) (assoc f :matrix (second exp)) f))
                    (cond
+                     (and (list? c) (keyword? (first c)))
+                       {:id (first c)}
                     (and (list? c) (number? (first (last c))))
                      {:id (first c)}
                     (and (vector? c) (number? (first c)))
