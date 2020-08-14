@@ -228,7 +228,7 @@
       (w node messages to))
      ([{:keys [cpm id dfn]} messages to]
       {
-       :value (map (comp first :value) (sort-by (comp dfn :id) messages))
+       :value (map :value (sort-by (comp dfn :id) messages))
        :mat messages
        }))
    [:mat :>< :variable]
@@ -665,7 +665,7 @@
   (into {}
     (map
       (fn [[id node]]
-        [id (mapv count (:value (<< :<> node (vals (get messages id)) nil nil nil)))])
+        [id (mapv (comp count first) (:value (<< :<> node (vals (get messages id)) nil nil nil)))])
       (filter (comp (fn [n] (= :factor (:kind n))) val) nodes))))
 
 (defn marginals
@@ -719,8 +719,8 @@
 
 (defn with-random-factors [alg exp]
   (let [{g :graph :as m} (exp->fg :mat exp)
-        md (into {} (remove (comp (partial == 1) first val) (-> m propagate mat-dimensions)))]
-    (update-factors (>alg m :sp)
+        md (into {} (remove (comp (partial == 1) count val) (-> m propagate mat-dimensions)))]
+    (update-factors (>alg m alg)
       (zipmap (keys md) (map random-matrix (vals md))))))
 
 (defn as-states [config model]
