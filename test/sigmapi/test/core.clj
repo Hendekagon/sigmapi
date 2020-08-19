@@ -239,3 +239,31 @@
         ])
      }
     ))
+
+(defn MHP1
+  "
+
+  "
+  []
+  (sp/with-random-factors :sp (fgtree
+     (host's-choice [3]
+       [host's-choice|your-1st-choice
+        []
+        (your-1st-choice [3]
+          [prize|your-1st-choice&door
+           []
+           (door-0 [3])
+           (prize-0 [2])])]
+       [host's-choice|door
+        []
+        (door [3])]
+       [your-2nd-choice|host's-choice
+        []
+        (your-2nd-choice [3]
+          [your-2nd-choice|your-1st-choice
+           []
+           (your-1st-choice-0 [3])]
+          [prize|your-2nd-choice&door
+           []
+           (door-1 [3])
+           (prize-1 [2])])]))))

@@ -461,9 +461,9 @@
                       :matrix (m/matrix (repeat (first c) (/ 1 (first c))))}
                     (and (list? c) (number? (first (second c))))
                       {:id (first c)}
-                    (and (vector? c) (number? (first c)))
-                     {:id (keyword (str "p-" (name (first exp))))
-                      :matrix (m/matrix (repeat (first c) (/ 1 (first c))))}
+                    (and (vector? c) (keyword? (first c)) (number? (first (last c))))
+                     {:id (first c)
+                      :matrix (m/matrix (repeat (first (last c)) (/ 1 (first (last c)))))}
                     (vector? c) {:id (first c) :matrix (second c)}
                     :default {:id (first c)})])))
           edges branches))
@@ -491,6 +491,14 @@
         (fn [n]
           (and (leaf? graph n) (= :factor (:kind (nodes n)))))
         (lg/nodes graph)))))
+
+(defn priors-map [{:keys [graph nodes] :as model}]
+  (reduce
+    (fn [r n]
+      (if-let [p (first (filter (partial leaf? graph) (map lg/dest (lg/out-edges graph n))))]
+        (assoc r n p)
+        r))
+    {} (filter (comp #{:variable} :kind nodes) (lg/nodes graph))))
 
 (defn msgs-from-leaves [{:keys [messages << graph leaves nodes] :as model}]
   (reduce
@@ -665,7 +673,10 @@
   (into {}
     (map
       (fn [[id node]]
-        [id (mapv (comp count first) (:value (<< :<> node (vals (get messages id)) nil nil nil)))])
+        (let [mv (:value (<< :<> node (vals (get messages id)) nil nil nil))]
+          (if (every? vector? (remove seq? (tree-seq seq? seq mv)))
+            [id (mapv (comp count first) mv)]
+            (throw (ex-info (str "Underspecified variable node for factor " id) {id mv})))))
       (filter (comp (fn [n] (= :factor (:kind n))) val) nodes))))
 
 (defn marginals
@@ -716,6 +727,25 @@
 (defn compute-MAP-config [exp]
   (MAP-config
     (propagate (exp->fg :max exp))))
+
+(defn expand-factor
+  ([{g :graph nodes :nodes :as m} f]
+    (expand-factor (get-in nodes [f :cpm])))
+  ([mat]
+    (let [cols (m/column-count mat)
+          rows (m/row-count mat)
+          rows1 (/ 1 rows)
+          urc (m/reshape (m/matrix (repeat (* rows cols) (/ 1 (* rows cols)))) [rows cols])]
+      (mapcat
+        (fn [[i j]]
+          [[{:id (keyword (str "column-" i))}
+            {:id (keyword (str "p-column-" i)) :matrix (m/matrix (repeat rows rows1))}]
+           [{:id (keyword (str "column-" i))}
+            {:id (keyword (str "c-" i "&" j)) :matrix urc}]
+           [{:id (keyword (str "c-" i "&" j)) :matrix urc}
+            {:id (keyword (str "column-" j))}]])
+        (partition 2 1
+         (take (inc cols) (cycle (range cols))))))))
 
 (defn with-random-factors [alg exp]
   (let [{g :graph :as m} (exp->fg :mat exp)
@@ -804,3 +834,16 @@
         (-> model
           (assoc :learned g)
           (assoc :marginals (normalize-vals (sigmapi.core/marginals (propagate g)))))))
+
+(defn learn-step-cycle
+  [{:keys [fg learned marginals priors data cycles] :as model}]
+      (let [
+             {<< :<< nodes :nodes :as graph} (or learned (exp->fg :sp fg))
+              post (or marginals (zipmap (keys priors) (map (comp (partial map P) :value (partial << :i) nodes) (map (fn [v] (if (keyword? v) v (last v))) (vals priors)))))
+              p2 (select-keys post (keys priors))
+              p1 (merge (zipmap (map (fn [v] (if (keyword? v) v (first v))) (vals priors)) (map p2 (keys priors))) data)
+              g (update-factors graph p1)
+            ]
+        (-> model
+          (assoc :learned g)
+          (assoc :marginals (normalize-vals (sigmapi.core/marginals (propagate-cycles cycles g)))))))
