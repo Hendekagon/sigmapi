@@ -211,7 +211,7 @@
    [:ssp :>< :factor]
    (fn [{:keys [cpm id dfn]} messages to]
      {
-      :value (cons '∑ (list (cons '∏ (list id (if (== 1 (count messages)) (:repr (first messages)) (map :repr messages))))))
+      :value (cons '∑ (list (cons '∏ (list id (if (== 1 (count messages)) (:value (first messages)) (map :value messages))))))
       })
    [:smax :>< :factor]
    (fn w
@@ -236,8 +236,7 @@
      ([node messages to to-msg parent-msg]
       (w node messages to))
      ([{:keys [f id dfn]} messages to]
-      {:value (map :value
-                messages)}))
+      {:value (map :value messages)}))
    [:mat :<> :variable] [:mat :>< :variable]
    [:max :>< :factor]
    (fn [{:keys [cpm id dfn]} messages to]
@@ -315,8 +314,8 @@
      {
       :value
       (if (== 1 (count messages))
-        (:repr (first messages))
-        (cons '∏ (map :repr messages)))
+        (:value (first messages))
+        (cons '∏ (map :value messages)))
       })
    [:qwe :<> :factor]
    (fn [node] {:value 7})
@@ -463,7 +462,10 @@
                       {:id (first c)}
                     (and (vector? c) (keyword? (first c)) (number? (first (last c))))
                      {:id (first c)
-                      :matrix (m/matrix (repeat (first (last c)) (/ 1 (first (last c)))))}
+                      :matrix (let [pc (last c)]
+                                (m/matrix (if (== 1 (count pc))
+                                  (repeat (first (last c)) (/ 1 (first (last c))))
+                                  pc)))}
                     (vector? c) {:id (first c) :matrix (second c)}
                     :default {:id (first c)})])))
           edges branches))
@@ -735,17 +737,37 @@
     (let [cols (m/column-count mat)
           rows (m/row-count mat)
           rows1 (/ 1 rows)
-          urc (m/reshape (m/matrix (repeat (* rows cols) (/ 1 (* rows cols)))) [rows cols])]
-      (mapcat
-        (fn [[i j]]
-          [[{:id (keyword (str "column-" i))}
-            {:id (keyword (str "p-column-" i)) :matrix (m/matrix (repeat rows rows1))}]
-           [{:id (keyword (str "column-" i))}
-            {:id (keyword (str "c-" i "&" j)) :matrix urc}]
-           [{:id (keyword (str "c-" i "&" j)) :matrix urc}
-            {:id (keyword (str "column-" j))}]])
-        (partition 2 1
-         (take (inc cols) (cycle (range cols))))))))
+          rp (m/matrix (repeat rows rows1))
+          urc (m/reshape (m/matrix (repeat (* rows cols cols cols) 1)) [rows cols cols cols])
+          urc1 (m/identity-matrix rows cols)
+          ]
+      (concat
+        [
+          [{:id :a} {:id :p-a :matrix rp}]
+          [{:id :a} {:id :c-0|a :matrix urc}]
+          [{:id :c-0|a :matrix urc} {:id :column-0}]
+        ]
+        (mapcat
+         (fn [i j]
+           [
+            [{:id (keyword (str "column-" i))}
+             {:id (keyword (str "p-column-" i)) :matrix rp}]
+            [{:id (keyword (str "column-" i))}
+             {:id (keyword (str "c+" i "&" j)) :matrix urc}]
+            [{:id (keyword (str "c+" i "&" j)) :matrix urc}
+             {:id (keyword (str "column-" j))}]
+            [{:id (keyword (str "column-" j))}
+             {:id (keyword (str "p-column-" j)) :matrix rp}]
+            [{:id (keyword (str "c+" i "&" j)) :matrix urc}
+             {:id (keyword (str "c+" j))}]
+            [{:id (keyword (str "c+" j))}
+             {:id (keyword (str "c+" j "&" (inc j))) :matrix urc}]])
+          (range cols))
+         [
+          [{:id (keyword (str "c+" (dec cols))) :matrix urc}
+           {:id :b}]
+          [{:id :b} {:id :p-b :matrix rp}]
+         ]))))
 
 (defn with-random-factors [alg exp]
   (let [{g :graph :as m} (exp->fg :mat exp)
@@ -797,7 +819,7 @@
               p1 (merge (zipmap (vals priors) (map p2 (keys priors))) data-priors)
               g  (update-factors g p1)
             ]
-        [g (normalize-vals (marginals (propagate g)))]))
+        [g (normalize-vals (sigmapi.core/marginals (propagate g)))]))
     [learned (or marginals (zipmap (keys priors) (map (comp (partial mapv P) :value (partial << :i) (:nodes learned)) (vals priors))))] data))
 
 (defn learned-variables [{:keys [fg learned marginals priors data] :as model}]

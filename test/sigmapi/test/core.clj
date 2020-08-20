@@ -10,6 +10,8 @@
     [loom.alg :as la]
     [clojure.string :as string]))
 
+(defn e= [e x y] (< (Math/abs (- x y)) e))
+
 (defn figure7
   "Figure 7 in Frey2001 Factor graphs and the sum product algorithm"
   ([]
@@ -267,3 +269,40 @@
            []
            (door-1 [3])
            (prize-1 [2])])]))))
+
+(defn test-Bayesian-updating
+  "
+   An example from
+   https://ocw.mit.edu/courses/mathematics/18-05-introduction-to-probability-and-statistics-spring-2014/readings/MIT18_05S14_Reading11.pdf
+  "
+  []
+  (let
+    [model
+     {:fg
+      (sp/fgtree
+        (:d [:pd [0.5 0.5]]
+          [:d|h
+           [
+            [0.5 0.4 0.1]
+            [0.5 0.6 0.9]
+            ]
+           (:h [:ph [0.4 0.4 0.2]])
+           ]))
+      :priors
+      {:h :ph :d :pd}}
+     experiment
+       (assoc model :data
+         [
+          {:pd [0 1]}
+          {:pd [0 1]}
+          ])
+       {h :h} (-> experiment sp/learned-variables :marginals)
+       expected [0.2463 0.3547 0.3990]
+       result (map (fn [hv ev] [hv ev (e= 10e-5 hv ev)]) h expected)
+     ]
+     {
+       :expected expected
+       :result h
+       :pass? (every? true? (map last result))
+       :experiment experiment
+     }))
