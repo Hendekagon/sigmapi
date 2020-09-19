@@ -373,6 +373,18 @@
       (filter (fn [[k v]] (and (= :factor (:kind v))
                                (> (m/dimensionality (:cpm v)) 1))) nodes))))
 
+(defn bipartite-check [{:keys [nodes graph]}]
+  (let [v (map
+            (fn [n] [n (filter (comp #{:variable} :kind nodes) (lg/successors graph n))])
+            (filter (comp #{:variable} :kind nodes) (lg/nodes graph)))
+        f (map
+            (fn [n] [n (filter (comp #{:factor} :kind nodes) (lg/successors graph n))])
+            (filter (comp #{:factor} :kind nodes) (lg/nodes graph)))
+        ]
+      (if (and (every? (comp empty? last) v) (every? (comp empty? last) f))
+        true
+        (throw (ex-info "Graph not bipartite" {:variable v :factor f})))))
+
 (defn edges->fg
   "
   TODO: need to check shape of graph and
@@ -748,7 +760,7 @@
           [{:id :c-0|a :matrix urc} {:id :column-0}]
         ]
         (mapcat
-         (fn [i j]
+         (fn [[i j]]
            [
             [{:id (keyword (str "column-" i))}
              {:id (keyword (str "p-column-" i)) :matrix rp}]
@@ -762,7 +774,7 @@
              {:id (keyword (str "c+" j))}]
             [{:id (keyword (str "c+" j))}
              {:id (keyword (str "c+" j "&" (inc j))) :matrix urc}]])
-          (range cols))
+          (partition 2 1 (range cols)))
          [
           [{:id (keyword (str "c+" (dec cols))) :matrix urc}
            {:id :b}]

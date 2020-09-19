@@ -272,8 +272,9 @@
 
 (defn test-Bayesian-updating
   "
-   An example from
-   https://ocw.mit.edu/courses/mathematics/18-05-introduction-to-probability-and-statistics-spring-2014/readings/MIT18_05S14_Reading11.pdf
+    An example from:
+    https://ocw.mit.edu/courses/mathematics/18-05-introduction-to-probability-and-statistics-spring-2014/readings/MIT18_05S14_Reading11.pdf
+    part 4 Updating again and again
   "
   []
   (let
@@ -281,7 +282,7 @@
      {:fg
       (sp/fgtree
         (:d [:pd [0.5 0.5]]
-          [:d|h
+          [:h|d
            [
             [0.5 0.4 0.1]
             [0.5 0.6 0.9]
@@ -304,5 +305,90 @@
        :expected expected
        :result h
        :pass? (every? true? (map last result))
+       :experiment experiment
+     }))
+
+(defn tbu
+  []
+  (let
+    [model
+     {:fg
+      (sp/fgtree
+        (:d [:pd [0.5 0.5]]
+          [:h|d
+           [
+            [0.5 0.4 0.1 0.7]
+            [0.5 0.6 0.9 0.3]
+            ]
+           (:h [:ph [0.7 0.1 0.1 0.1]])
+           ]))
+      :priors
+      {:h :ph :d :pd}}
+     experiment
+       (assoc model :data
+         (concat (repeat 40 {:pd [1 0]}) (repeat 60 {:pd [0 1]})))
+       {h :h} (-> experiment sp/learned-variables :marginals)
+     ]
+     {
+       :result h
+       :experiment experiment
+     }))
+
+
+(defn tbu0
+  []
+  (let
+    [model
+     {:fg
+      (sp/fgtree
+        (:d [:pd [1/2 1/2]]
+          [:h|d
+           [
+            [0.9 0.5 0.1]
+            [0.1 0.5 0.9]
+            ]
+           (:h [:ph [1/3 1/3 1/3]])
+           ]))
+      :priors
+      {:h :ph :d :pd}}
+     experiment
+       (assoc model :data
+         (concat (repeat 40 {:pd [1 0]}) (repeat 60 {:pd [0 1]})))
+       {h :h} (-> experiment sp/learned-variables :marginals)
+     ]
+     {
+       :result h
+       :experiment experiment
+     }))
+
+
+(defn tbu1
+  []
+  (let
+    [model
+     {:fg
+      (sp/fgtree
+        (:h [:ph [1/3 1/3 1/3]]
+          [:c|h&d
+            [
+              [[1.1 0.9] [0.9 1.1]]
+              [[0.9 0.1] [0.1 0.9]]
+              [[0.9 0.1] [0.1 0.9]]
+            ]
+            (:d [:pd [1/2 1/2]])
+            (:c [:pc [1/2 1/2]])]))
+      :priors
+      {:h :ph :d :pd :c :pc}}
+     experiment
+     (-> model
+       (assoc :learned (exp->fg :sp (:fg model)))
+       (assoc :data
+        (concat
+          (repeat 20 {:ph [1 0 0] :pd [1 0]})
+          (repeat 80 {:ph [1 0 0] :pd [0 1]}))))
+       m (-> experiment sp/learn-variables)
+     ]
+     {
+       :result m
        :experiment experiment
      }))
